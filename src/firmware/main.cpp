@@ -373,15 +373,20 @@ void displayPacket(const byte* data, int len) {
  */
 void setBacklight(int red, int green, int blue) {
   #ifdef HAS_BL_POT
-    uint16_t backlight = analogRead(BL_POT) >> 2;
-    analogWrite(LCD_RED_BACKLIGHT_PIN, map(0xff - red,0,0xff,0,backlight));
-    analogWrite(LCD_GREEN_BACKLIGHT_PIN, map(0xff - green,0,0xff,0,backlight));
-    analogWrite(LCD_BLUE_BACKLIGHT_PIN, map(0xff - blue,0,0xff,0,backlight));
-  #else
+
+    // So, this is the stupidest way to do this, but it works.
+    // Improvements welcome.
+
+    float backlight = analogRead(BL_POT) / 1024.0;
+
+    red = (int)(red * backlight);
+    green = (int)(green * backlight);
+    blue = (int)(blue * backlight);
+  #endif
     analogWrite(LCD_RED_BACKLIGHT_PIN, 0xff - red);
     analogWrite(LCD_GREEN_BACKLIGHT_PIN, 0xff - green);
     analogWrite(LCD_BLUE_BACKLIGHT_PIN, 0xff - blue);
-  #endif
+
 }
 
 /**
