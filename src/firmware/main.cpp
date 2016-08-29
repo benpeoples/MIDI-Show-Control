@@ -62,6 +62,14 @@
 #define BUTTON_MODE                 NORMALLY_OPEN //How the button is wired
 #define USE_MIDI                    1 //1 to use MIDI, 0 to use serial
 
+//Relay options
+#define RELAY_PIN A2
+#define HAS_RELAY
+
+//Backlight Fader
+#define BL_POT 1
+#define HAS_BL_POT
+
 //Constants - do not modify
 #if BUTTON_MODE == NORMALLY_OPEN
 #define BUTTON_DOWN                 RISING
@@ -153,6 +161,10 @@ void setup() {
 #else
   Serial.begin(115200);
 #endif
+
+  #ifdef HAS_RELAY
+    pinMode(RELAY_PIN,OUTPUT); // If we have a relay, set its control pin to be output
+  #endif
 
   setupLCD();
 
@@ -360,9 +372,16 @@ void displayPacket(const byte* data, int len) {
  *  @param blue   The blue value of the backlight
  */
 void setBacklight(int red, int green, int blue) {
-  analogWrite(LCD_RED_BACKLIGHT_PIN, 0xff - red);
-  analogWrite(LCD_GREEN_BACKLIGHT_PIN, 0xff - green);
-  analogWrite(LCD_BLUE_BACKLIGHT_PIN, 0xff - blue);
+  #ifdef HAS_BL_POT
+    uint16_t backlight = analogRead(BL_POT) >> 2;
+    analogWrite(LCD_RED_BACKLIGHT_PIN, map(0xff - red,0,0xff,0,backlight));
+    analogWrite(LCD_GREEN_BACKLIGHT_PIN, map(0xff - green,0,0xff,0,backlight));
+    analogWrite(LCD_BLUE_BACKLIGHT_PIN, map(0xff - blue,0,0xff,0,backlight));
+  #else
+    analogWrite(LCD_RED_BACKLIGHT_PIN, 0xff - red);
+    analogWrite(LCD_GREEN_BACKLIGHT_PIN, 0xff - green);
+    analogWrite(LCD_BLUE_BACKLIGHT_PIN, 0xff - blue);
+  #endif
 }
 
 /**
@@ -403,13 +422,13 @@ void buttonInterrupt() {
 
   if (millis() - lastButtonPress > DEBOUNCE_TIME) {
     paused = !paused;
-    
+
     if (paused) {
       pauseMIDI();
     } else {
       passMIDI();
     }
-    
+
   }
   lastButtonPress = millis();
 }
@@ -425,6 +444,10 @@ void pauseMIDI() {
   LCD.setCursor(8, 3);
   LCD.print("-MSC*PAUSED*");
 
+#ifdef HAS_RELAY
+  digitalWrite(RELAY_PIN,HIGH); // Turn on relay - normals to passing
+#endif
+
   setBacklight(RED);
 }
 
@@ -435,6 +458,11 @@ void passMIDI() {
 #if USE_MIDI
   MIDI.turnThruOn();
 #endif
+
+#ifdef HAS_RELAY
+  digitalWrite(RELAY_PIN,LOW); // Turn off relay - normals to passing
+#endif
+
 
   LCD.setCursor(8, 3);
   LCD.print("-MSC-PASS >>");
