@@ -32,9 +32,9 @@
 
 //LCD
 //http://learn.adafruit.com/character-lcds
-#define LCD_RED_BACKLIGHT_PIN       3
+#define LCD_RED_BACKLIGHT_PIN       6
 #define LCD_GREEN_BACKLIGHT_PIN     5
-#define LCD_BLUE_BACKLIGHT_PIN      6
+#define LCD_BLUE_BACKLIGHT_PIN      3
 #define LCD_CONTROL_PIN             7
 #define LCD_ENABLE_PIN              8
 #define LCD_DATA_BIT_4_PIN          9
@@ -78,6 +78,16 @@
 #define BUTTON_DOWN                 FALLING
 #define BUTTON_UP                   RISING
 #endif
+
+#define BTN_LOW 20
+#define BTN_HIGH 50
+#define BTN_MAX 70
+
+unsigned int button_ctr = 0;
+unsigned int button_state = 0;
+long lastButtonPress = 0;
+
+unsigned int enable_button = 0;
 
 //String constants for MSC command types
 char* invalid_str = "INVALID";
@@ -156,6 +166,8 @@ volatile bool paused = false;
  *  Sets up MIDI, the LCD, and the button
  */
 void setup() {
+
+  pinMode(A5, INPUT_PULLUP);
 #if USE_MIDI
   MIDI.begin();
 #else
@@ -170,7 +182,7 @@ void setup() {
 
   passMIDI();
 
-  setupButton();
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
 
 /**
@@ -179,6 +191,37 @@ void setup() {
 void loop() {
   static long lastSysExTime = 0;
   static bool lcdIsBlue = false;
+
+  enable_button = digitalRead(A5);
+
+  // Progress the button debounce
+  if(digitalRead(BUTTON_PIN) == LOW) { // is pressed
+    if(button_ctr < BTN_MAX) { // is less than max
+      button_ctr++;
+    }
+  } else { // is not pressed
+    if(button_ctr > 0) { // is greater than 0
+      button_ctr--;
+    }
+  }
+
+  if(enable_button) {
+    if(button_ctr < BTN_LOW && button_state == 1) { // button was pressed and is now not
+      lastButtonPress = millis();
+      button_state = 0;
+    } else if(button_ctr > BTN_HIGH && button_state == 0) { // button was not pressed and now is
+      if(millis() - lastButtonPress > DEBOUNCE_TIME) {
+        button_state = 1;
+        paused = !paused;
+
+        if (paused) {
+          pauseMIDI();
+        } else {
+          passMIDI();
+        }
+      }
+    }
+  }
 
 #if USE_MIDI
   if (MIDI.read()) {
@@ -204,14 +247,19 @@ void loop() {
   //Check whether the display has been blue for long enough
   if (lcdIsBlue && millis() - lastSysExTime > SYSEX_FLASH_TIME) {
     //Decide which color to revert to
-    if (paused) {
-      setBacklight(RED);
+    if(enable_button) {
+      if (paused) {
+        setBacklight(RED);
+      } else {
+        setBacklight(GREEN);
+      }      
     } else {
-      setBacklight(GREEN);
+        setBacklight(0x00FFFF);
     }
     lcdIsBlue = false;
   }
 }
+
 
 
 
@@ -471,6 +519,9 @@ void passMIDI() {
 
   LCD.setCursor(8, 3);
   LCD.print("-MSC-PASS >>");
-
-  setBacklight(GREEN);
+  if(digitalRead(A5) == 1) {
+      setBacklight(GREEN);
+  } else {
+    setBacklight(0x00FFFF);
+  }
 }
